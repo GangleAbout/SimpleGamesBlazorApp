@@ -1,0 +1,66 @@
+name: gh-pages
+
+env:
+  OUTPUT_DIR: publish
+  PROJECT_NAME: SimpleGamesBlazorApp
+
+permissions:
+  contents: write
+  pages: write
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy-to-gh-pages:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout the code
+      - uses: actions/checkout@v4
+      
+      # Install .NET Core SDK
+      - name: Setup .Net Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
+      
+      # Install WASM Build Tools
+      - name: Install .Net WASM Build Tools
+        run: dotnet workload install wasm-tools
+      
+      # .NET publish project
+      - name: Publish .NET Project
+        run: dotnet publish src/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}.csproj -c:Release -o:${{ env.OUTPUT_DIR }} --nologo
+      
+      # Change base-tag in index.html
+      - name: Change base-tag in index.html
+        run: sed -i 's/<base href="\/" \/>/<base href="\/${{ env.PROJECT_NAME }}\/" \/>/g' ${{ env.OUTPUT_DIR }}/wwwroot/index.html
+      
+      # Copy index.html to 404.html
+      - name: Copy index.html to 404.html
+        run: cp ${{ env.OUTPUT_DIR }}/wwwroot/index.html ${{ env.OUTPUT_DIR }}/wwwroot/404.html
+      
+      # Create .nojekyll file
+      - name: Create .nojekyll file
+        run: touch ${{ env.OUTPUT_DIR }}/wwwroot/.nojekyll
+      
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4.6.0
+        with:
+          token: ${{ secrets.ACCESS_TOKEN }}
+          branch: gh-pages
+          folder: ${{ env.OUTPUT_DIR }}/wwwroot
+      
